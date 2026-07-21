@@ -1,0 +1,1725 @@
+[
+  {
+    "id": "project:bike_store",
+    "type": "project",
+    "name": "Bike Store Multi-Agent Analytics Copilot",
+    "description": "Cloud-first analytics project: CSV -> Supabase -> analytics marts -> dashboard/API -> multi-agent Vietnamese copilot.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "schema:raw",
+    "type": "schema",
+    "name": "raw",
+    "description": "Supabase PostgreSQL schema `raw` trong kiến trúc Bike Store.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "schema:staging",
+    "type": "schema",
+    "name": "staging",
+    "description": "Supabase PostgreSQL schema `staging` trong kiến trúc Bike Store.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "schema:analytics",
+    "type": "schema",
+    "name": "analytics",
+    "description": "Supabase PostgreSQL schema `analytics` trong kiến trúc Bike Store.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "schema:agent",
+    "type": "schema",
+    "name": "agent",
+    "description": "Supabase PostgreSQL schema `agent` trong kiến trúc Bike Store.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "schema:audit",
+    "type": "schema",
+    "name": "audit",
+    "description": "Supabase PostgreSQL schema `audit` trong kiến trúc Bike Store.",
+    "source": "PRD.md"
+  },
+  {
+    "id": "table:agent.agent_registry",
+    "type": "metadata_table",
+    "name": "agent.agent_registry",
+    "description": "Registry of orchestrator and domain agents, their domains, default metrics and table scope.",
+    "source": "sql/agent/010_agent_metadata_tables.sql"
+  },
+  {
+    "id": "table:agent.metric_catalog",
+    "type": "metadata_table",
+    "name": "agent.metric_catalog",
+    "description": "Seeded metric definitions, formulas, grain, source tables, caveats and owner agents.",
+    "source": "sql/agent/020_seed_agent_metadata.sql"
+  },
+  {
+    "id": "table:agent.sql_templates",
+    "type": "metadata_table",
+    "name": "agent.sql_templates",
+    "description": "Read-only SQL template catalog for deterministic copilot answers and guardrail-friendly query generation.",
+    "source": "sql/agent/020_seed_agent_metadata.sql"
+  },
+  {
+    "id": "table:agent.question_examples",
+    "type": "metadata_table",
+    "name": "agent.question_examples",
+    "description": "Vietnamese evaluation and demo questions with expected agents, templates, metrics and source tables.",
+    "source": "sql/agent/020_seed_agent_metadata.sql"
+  },
+  {
+    "id": "table:agent.rag_embeddings",
+    "type": "metadata_table",
+    "name": "agent.rag_embeddings",
+    "description": "pgvector-backed embedding store for graph nodes used by the Bike Store RAG layer.",
+    "source": "sql/agent/010_agent_metadata_tables.sql"
+  },
+  {
+    "id": "table:agent.metric_catalog_seed",
+    "type": "view",
+    "name": "agent.metric_catalog_seed",
+    "description": "SQL view agent.metric_catalog_seed",
+    "source": "sql\\marts\\040_agent_read_models.sql",
+    "code_snippet": "create or replace view agent.metric_catalog_seed as\nselect *\nfrom (\n    values\n        ('revenue', 'Doanh thu sau discount', 'analytics.fact_sales.revenue = quantity * list_price * (1 - discount)', 'analytics.fact_sales'),\n        ('orders', 'So don hang distinct', 'count(distinct order_id)', 'analytics.fact_sales'),\n        ('units_sold', 'Tong so luong san pham ban ra', 'sum(quantity)', 'analytics.fact_sales'),\n        ('average_order_value', 'Gia tri don hang trung binh', 'sum(revenue) / count(distinct order_id)', 'analytics.fact_sales'),\n        ('discount_rate', 'Ty le discount theo doanh thu gross', 'sum(discount_amount) / sum(gross_sales)', 'analytics.fact_sales'),\n        ('late_shipment_rate', 'Ty le giao tre tren don da ship', 'avg(is_late_shipment)', 'analytics.fact_sales'),\n        ('stock_quantity', 'So luong ton kho', 'analytics.fact_inventory.stock_quantity', 'analytics.fact_inventory'),\n        ('inventory_value', 'Gia tri ton kho proxy', 'stock_quantity * list_price', 'analytics.fact_inventory')\n) as metrics(metric_name, description, formula, primary_source);"
+  },
+  {
+    "id": "table:agent.active_sql_templates",
+    "type": "view",
+    "name": "agent.active_sql_templates",
+    "description": "SQL view agent.active_sql_templates",
+    "source": "sql\\agent\\020_seed_agent_metadata.sql",
+    "code_snippet": "create or replace view agent.active_sql_templates as\nselect\n    template_name,\n    domain,\n    agents,\n    keywords,\n    metrics,\n    tables,\n    description,\n    sql_template,\n    result_grain,\n    chart_hint\nfrom agent.sql_templates\nwhere is_active;"
+  },
+  {
+    "id": "table:agent.eval_question_examples",
+    "type": "view",
+    "name": "agent.eval_question_examples",
+    "description": "SQL view agent.eval_question_examples",
+    "source": "sql\\agent\\020_seed_agent_metadata.sql",
+    "code_snippet": "create or replace view agent.eval_question_examples as\nselect\n    question_id,\n    domain,\n    question_vi,\n    expected_agents,\n    expected_template,\n    metrics,\n    tables,\n    tags,\n    difficulty\nfrom agent.question_examples\nwhere is_eval_question;"
+  },
+  {
+    "id": "table:analytics.dim_brand",
+    "type": "view",
+    "name": "analytics.dim_brand",
+    "description": "SQL view analytics.dim_brand",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_brand as\nselect\n    brand_id,\n    brand_name\nfrom staging.stg_brands;"
+  },
+  {
+    "id": "table:staging.stg_brands",
+    "type": "view",
+    "name": "staging.stg_brands",
+    "description": "SQL view staging.stg_brands",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_brands as\nselect\n    brand_id::integer as brand_id,\n    nullif(trim(brand_name), '') as brand_name\nfrom raw.brands;"
+  },
+  {
+    "id": "table:analytics.dim_category",
+    "type": "view",
+    "name": "analytics.dim_category",
+    "description": "SQL view analytics.dim_category",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_category as\nselect\n    category_id,\n    category_name\nfrom staging.stg_categories;"
+  },
+  {
+    "id": "table:staging.stg_categories",
+    "type": "view",
+    "name": "staging.stg_categories",
+    "description": "SQL view staging.stg_categories",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_categories as\nselect\n    category_id::integer as category_id,\n    nullif(trim(category_name), '') as category_name\nfrom raw.categories;"
+  },
+  {
+    "id": "table:analytics.dim_customer",
+    "type": "view",
+    "name": "analytics.dim_customer",
+    "description": "SQL view analytics.dim_customer",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_customer as\nselect\n    customer_id,\n    first_name,\n    last_name,\n    customer_name,\n    phone,\n    email,\n    street,\n    city,\n    state,\n    zip_code\nfrom staging.stg_customers;"
+  },
+  {
+    "id": "table:staging.stg_customers",
+    "type": "view",
+    "name": "staging.stg_customers",
+    "description": "SQL view staging.stg_customers",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_customers as\nselect\n    customer_id::integer as customer_id,\n    nullif(trim(first_name), '') as first_name,\n    nullif(trim(last_name), '') as last_name,\n    nullif(trim(concat_ws(' ', nullif(trim(first_name), ''), nullif(trim(last_name), ''))), '') as customer_name,\n    nullif(trim(phone), '') as phone,\n    lower(nullif(trim(email), '')) as email,\n    nullif(trim(street), '') as street,\n    nullif(trim(city), '') as city,\n    upper(nullif(trim(state), '')) as state,\n    nullif(trim(zip_code), '') as zip_code\nfrom raw.customers;"
+  },
+  {
+    "id": "table:analytics.dim_store",
+    "type": "view",
+    "name": "analytics.dim_store",
+    "description": "SQL view analytics.dim_store",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_store as\nselect\n    store_id,\n    store_name,\n    phone,\n    email,\n    street,\n    city,\n    state,\n    zip_code\nfrom staging.stg_stores;"
+  },
+  {
+    "id": "table:staging.stg_stores",
+    "type": "view",
+    "name": "staging.stg_stores",
+    "description": "SQL view staging.stg_stores",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_stores as\nselect\n    store_id::integer as store_id,\n    nullif(trim(store_name), '') as store_name,\n    nullif(trim(phone), '') as phone,\n    lower(nullif(trim(email), '')) as email,\n    nullif(trim(street), '') as street,\n    nullif(trim(city), '') as city,\n    upper(nullif(trim(state), '')) as state,\n    nullif(trim(zip_code), '') as zip_code\nfrom raw.stores;"
+  },
+  {
+    "id": "table:analytics.dim_product",
+    "type": "view",
+    "name": "analytics.dim_product",
+    "description": "SQL view analytics.dim_product",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_product as\nselect\n    p.product_id,\n    p.product_name,\n    p.brand_id,\n    b.brand_name,\n    p.category_id,\n    c.category_name,\n    p.model_year,\n    p.list_price\nfrom staging.stg_products p\nleft join staging.stg_brands b\n    on p.brand_id = b.brand_id\nleft join staging.stg_categories c\n    on p.category_id = c.category_id;"
+  },
+  {
+    "id": "table:staging.stg_products",
+    "type": "view",
+    "name": "staging.stg_products",
+    "description": "SQL view staging.stg_products",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_products as\nselect\n    product_id::integer as product_id,\n    nullif(trim(product_name), '') as product_name,\n    brand_id::integer as brand_id,\n    category_id::integer as category_id,\n    model_year::integer as model_year,\n    list_price::numeric(12, 2) as list_price\nfrom raw.products;"
+  },
+  {
+    "id": "table:analytics.dim_staff",
+    "type": "view",
+    "name": "analytics.dim_staff",
+    "description": "SQL view analytics.dim_staff",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_staff as\nselect\n    s.staff_id,\n    s.first_name,\n    s.last_name,\n    s.staff_name,\n    s.email,\n    s.phone,\n    s.active,\n    s.is_active,\n    s.store_id,\n    st.store_name,\n    s.manager_id,\n    m.staff_name as manager_name\nfrom staging.stg_staffs s\nleft join staging.stg_stores st\n    on s.store_id = st.store_id\nleft join staging.stg_staffs m\n    on s.manager_id = m.staff_id;"
+  },
+  {
+    "id": "table:staging.stg_staffs",
+    "type": "view",
+    "name": "staging.stg_staffs",
+    "description": "SQL view staging.stg_staffs",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_staffs as\nselect\n    staff_id::integer as staff_id,\n    nullif(trim(first_name), '') as first_name,\n    nullif(trim(last_name), '') as last_name,\n    nullif(trim(concat_ws(' ', nullif(trim(first_name), ''), nullif(trim(last_name), ''))), '') as staff_name,\n    lower(nullif(trim(email), '')) as email,\n    nullif(trim(phone), '') as phone,\n    active::integer as active,\n    (active::integer = 1) as is_active,\n    store_id::integer as store_id,\n    manager_id::integer as manager_id\nfrom raw.staffs;"
+  },
+  {
+    "id": "table:analytics.dim_date",
+    "type": "view",
+    "name": "analytics.dim_date",
+    "description": "SQL view analytics.dim_date",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.dim_date as\nwith bounds as (\n    select\n        min(order_date)::date as start_date,\n        greatest(max(order_date), max(required_date), max(shipped_date))::date as end_date\n    from staging.stg_orders\n),\ndates as (\n    select generate_series(start_date, end_date, interval '1 day')::date as date_day\n    from bounds\n)\nselect\n    date_day,\n    extract(year from date_day)::integer as year,\n    extract(quarter from date_day)::integer as quarter,\n    extract(month from date_day)::integer as month,\n    to_char(date_day, 'YYYY-MM') as year_month,\n    extract(day from date_day)::integer as day_of_month,\n    extract(isodow from date_day)::integer as day_of_week,\n    to_char(date_day, 'Dy') as day_name,\n    (extract(isodow from date_day) in (6, 7)) as is_weekend\nfrom dates;"
+  },
+  {
+    "id": "table:staging.stg_orders",
+    "type": "view",
+    "name": "staging.stg_orders",
+    "description": "SQL view staging.stg_orders",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_orders as\nselect\n    order_id::integer as order_id,\n    customer_id::integer as customer_id,\n    order_status::integer as order_status,\n    case order_status::integer\n        when 1 then 'pending'\n        when 2 then 'processing'\n        when 3 then 'rejected'\n        when 4 then 'completed'\n        else 'unknown'\n    end as order_status_label,\n    order_date::date as order_date,\n    required_date::date as required_date,\n    shipped_date::date as shipped_date,\n    store_id::integer as store_id,\n    staff_id::integer as staff_id,\n    case\n        when shipped_date is null then null\n        else (shipped_date::date - order_date::date)\n    end as days_to_ship,\n    case\n        when shipped_date is null then null\n        else (shipped_date::date > required_date::date)\n    end as is_late_shipment\nfrom raw.orders;"
+  },
+  {
+    "id": "table:analytics.fact_sales",
+    "type": "view",
+    "name": "analytics.fact_sales",
+    "description": "Order-item sales fact with revenue, discount, shipment flags and customer/store/staff/product keys.",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.fact_sales as\nselect\n    concat(oi.order_id::text, '-', oi.item_id::text) as order_item_key,\n    o.order_id,\n    oi.item_id,\n    o.customer_id,\n    o.store_id,\n    o.staff_id,\n    oi.product_id,\n    o.order_status,\n    o.order_status_label,\n    o.order_date,\n    o.required_date,\n    o.shipped_date,\n    o.days_to_ship,\n    o.is_late_shipment,\n    oi.quantity,\n    oi.list_price,\n    oi.discount,\n    oi.gross_sales,\n    oi.discount_amount,\n    oi.revenue\nfrom staging.stg_orders o\ninner join staging.stg_order_items oi\n    on o.order_id = oi.order_id;"
+  },
+  {
+    "id": "table:staging.stg_order_items",
+    "type": "view",
+    "name": "staging.stg_order_items",
+    "description": "SQL view staging.stg_order_items",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_order_items as\nselect\n    order_id::integer as order_id,\n    item_id::integer as item_id,\n    product_id::integer as product_id,\n    quantity::integer as quantity,\n    list_price::numeric(12, 2) as list_price,\n    discount::numeric(8, 4) as discount,\n    (quantity::numeric * list_price::numeric) as gross_sales,\n    (quantity::numeric * list_price::numeric * discount::numeric) as discount_amount,\n    (quantity::numeric * list_price::numeric * (1 - discount::numeric)) as revenue\nfrom raw.order_items;"
+  },
+  {
+    "id": "table:analytics.fact_inventory",
+    "type": "view",
+    "name": "analytics.fact_inventory",
+    "description": "Store-product inventory fact with stock quantity and inventory value proxy.",
+    "source": "sql\\marts\\020_analytics_core_views.sql",
+    "code_snippet": "create or replace view analytics.fact_inventory as\nselect\n    s.store_id,\n    s.product_id,\n    s.quantity as stock_quantity,\n    p.list_price,\n    (s.quantity::numeric * p.list_price) as inventory_value\nfrom staging.stg_stocks s\nleft join staging.stg_products p\n    on s.product_id = p.product_id;"
+  },
+  {
+    "id": "table:staging.stg_stocks",
+    "type": "view",
+    "name": "staging.stg_stocks",
+    "description": "SQL view staging.stg_stocks",
+    "source": "sql\\models\\010_staging_views.sql",
+    "code_snippet": "create or replace view staging.stg_stocks as\nselect\n    store_id::integer as store_id,\n    product_id::integer as product_id,\n    quantity::integer as quantity\nfrom raw.stocks;"
+  },
+  {
+    "id": "table:analytics.mart_executive_summary",
+    "type": "view",
+    "name": "analytics.mart_executive_summary",
+    "description": "Single-row KPI overview for the Executive dashboard.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_executive_summary as\nselect\n    count(distinct order_id) as orders,\n    count(*) as order_items,\n    count(distinct customer_id) as customers_with_orders,\n    count(distinct product_id) as products_sold,\n    count(distinct store_id) as stores_with_orders,\n    min(order_date) as first_order_date,\n    max(order_date) as last_order_date,\n    round(sum(revenue), 2) as revenue,\n    sum(quantity) as units_sold,\n    round(sum(revenue) / nullif(count(distinct order_id), 0), 2) as average_order_value,\n    round(sum(discount_amount) / nullif(sum(gross_sales), 0), 4) as discount_rate,\n    round(avg(days_to_ship) filter (where shipped_date is not null), 2) as avg_days_to_ship,\n    round(avg(case when is_late_shipment then 1.0 else 0.0 end) filter (where shipped_date is not null), 4) as late_shipment_rate\nfrom analytics.fact_sales;"
+  },
+  {
+    "id": "table:analytics.mart_sales_monthly",
+    "type": "view",
+    "name": "analytics.mart_sales_monthly",
+    "description": "Monthly revenue trend mart for Sales and Executive dashboards.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_sales_monthly as\nselect\n    date_trunc('month', fs.order_date)::date as month,\n    extract(year from fs.order_date)::integer as year,\n    extract(month from fs.order_date)::integer as month_number,\n    count(distinct fs.order_id) as orders,\n    count(*) as order_items,\n    count(distinct fs.customer_id) as customers,\n    sum(fs.quantity) as units_sold,\n    round(sum(fs.gross_sales), 2) as gross_sales,\n    round(sum(fs.discount_amount), 2) as discount_amount,\n    round(sum(fs.revenue), 2) as revenue,\n    round(sum(fs.revenue) / nullif(count(distinct fs.order_id), 0), 2) as average_order_value,\n    round(sum(fs.discount_amount) / nullif(sum(fs.gross_sales), 0), 4) as discount_rate\nfrom analytics.fact_sales fs\ngroup by 1, 2, 3;"
+  },
+  {
+    "id": "table:analytics.mart_sales_by_store",
+    "type": "view",
+    "name": "analytics.mart_sales_by_store",
+    "description": "Store comparison mart with revenue, orders, AOV and late shipment rate.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_sales_by_store as\nselect\n    fs.store_id,\n    ds.store_name,\n    ds.city,\n    ds.state,\n    count(distinct fs.order_id) as orders,\n    count(distinct fs.customer_id) as customers,\n    sum(fs.quantity) as units_sold,\n    round(sum(fs.revenue), 2) as revenue,\n    round(sum(fs.revenue) / nullif(count(distinct fs.order_id), 0), 2) as average_order_value,\n    round(avg(case when fs.is_late_shipment then 1.0 else 0.0 end) filter (where fs.shipped_date is not null), 4) as late_shipment_rate\nfrom analytics.fact_sales fs\nleft join analytics.dim_store ds\n    on fs.store_id = ds.store_id\ngroup by fs.store_id, ds.store_name, ds.city, ds.state;"
+  },
+  {
+    "id": "table:analytics.mart_product_performance",
+    "type": "view",
+    "name": "analytics.mart_product_performance",
+    "description": "Product performance mart by product, brand and category.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_product_performance as\nselect\n    fs.product_id,\n    dp.product_name,\n    dp.brand_id,\n    dp.brand_name,\n    dp.category_id,\n    dp.category_name,\n    dp.model_year,\n    count(distinct fs.order_id) as orders,\n    sum(fs.quantity) as units_sold,\n    round(sum(fs.gross_sales), 2) as gross_sales,\n    round(sum(fs.discount_amount), 2) as discount_amount,\n    round(sum(fs.revenue), 2) as revenue,\n    round(sum(fs.revenue) / nullif(sum(fs.quantity), 0), 2) as avg_selling_price,\n    round(sum(fs.discount_amount) / nullif(sum(fs.gross_sales), 0), 4) as discount_rate\nfrom analytics.fact_sales fs\nleft join analytics.dim_product dp\n    on fs.product_id = dp.product_id\ngroup by\n    fs.product_id,\n    dp.product_name,\n    dp.brand_id,\n    dp.brand_name,\n    dp.category_id,\n    dp.category_name,\n    dp.model_year;"
+  },
+  {
+    "id": "table:analytics.mart_inventory_risk",
+    "type": "view",
+    "name": "analytics.mart_inventory_risk",
+    "description": "Inventory risk mart with sales velocity, days of supply and inventory status.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_inventory_risk as\nwith max_order_date as (\n    select max(order_date) as max_date\n    from analytics.fact_sales\n),\nrecent_sales as (\n    select\n        store_id,\n        product_id,\n        sum(quantity) as units_sold_90d\n    from analytics.fact_sales fs\n    cross join max_order_date m\n    where fs.order_date >= (m.max_date - interval '90 days')\n    group by store_id, product_id\n)\nselect\n    fi.store_id,\n    ds.store_name,\n    fi.product_id,\n    dp.product_name,\n    dp.brand_name,\n    dp.category_name,\n    fi.stock_quantity,\n    coalesce(rs.units_sold_90d, 0) as units_sold_90d,\n    round((coalesce(rs.units_sold_90d, 0)::numeric / 90), 4) as daily_sales_velocity,\n    case\n        when coalesce(rs.units_sold_90d, 0) = 0 then null\n        else round(fi.stock_quantity::numeric / nullif((rs.units_sold_90d::numeric / 90), 0), 1)\n    end as days_of_supply,\n    round(fi.inventory_value, 2) as inventory_value,\n    case\n        when fi.stock_quantity = 0 and coalesce(rs.units_sold_90d, 0) > 0 then 'stockout'\n        when coalesce(rs.units_sold_90d, 0) > 0 and fi.stock_quantity <= (rs.units_sold_90d::numeric / 90 * 14) then 'stockout_risk'\n        when co"
+  },
+  {
+    "id": "table:analytics.mart_customer_segments",
+    "type": "view",
+    "name": "analytics.mart_customer_segments",
+    "description": "Customer segmentation mart by revenue, orders and buying behavior.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_customer_segments as\nwith customer_sales as (\n    select\n        customer_id,\n        count(distinct order_id) as orders,\n        sum(quantity) as units_sold,\n        round(sum(revenue), 2) as revenue,\n        min(order_date) as first_order_date,\n        max(order_date) as last_order_date\n    from analytics.fact_sales\n    group by customer_id\n),\nranked as (\n    select\n        dc.customer_id,\n        dc.customer_name,\n        dc.city,\n        dc.state,\n        coalesce(cs.orders, 0) as orders,\n        coalesce(cs.units_sold, 0) as units_sold,\n        coalesce(cs.revenue, 0) as revenue,\n        cs.first_order_date,\n        cs.last_order_date,\n        percent_rank() over (order by coalesce(cs.revenue, 0)) as revenue_percent_rank\n    from analytics.dim_customer dc\n    left join customer_sales cs\n        on dc.customer_id = cs.customer_id\n)\nselect\n    customer_id,\n    customer_name,\n    city,\n    state,\n    orders,\n    units_sold,\n    revenue,\n    first_order_date,\n    last_order_date,\n    case\n        when orders = 0 then 'no_orders'\n        when revenue_percent_rank >= 0.95 then 'vip'\n        when revenue_percent_rank >= 0.80 then 'high_value'\n   "
+  },
+  {
+    "id": "table:analytics.mart_staff_performance",
+    "type": "view",
+    "name": "analytics.mart_staff_performance",
+    "description": "Staff performance mart by orders, revenue, AOV and manager/store.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_staff_performance as\nselect\n    fs.staff_id,\n    dsf.staff_name,\n    dsf.store_id,\n    dsf.store_name,\n    dsf.manager_id,\n    dsf.manager_name,\n    count(distinct fs.order_id) as orders,\n    count(distinct fs.customer_id) as customers,\n    sum(fs.quantity) as units_sold,\n    round(sum(fs.revenue), 2) as revenue,\n    round(sum(fs.revenue) / nullif(count(distinct fs.order_id), 0), 2) as average_order_value,\n    round(avg(case when fs.is_late_shipment then 1.0 else 0.0 end) filter (where fs.shipped_date is not null), 4) as late_shipment_rate\nfrom analytics.fact_sales fs\nleft join analytics.dim_staff dsf\n    on fs.staff_id = dsf.staff_id\ngroup by\n    fs.staff_id,\n    dsf.staff_name,\n    dsf.store_id,\n    dsf.store_name,\n    dsf.manager_id,\n    dsf.manager_name;"
+  },
+  {
+    "id": "table:analytics.mart_delivery_performance",
+    "type": "view",
+    "name": "analytics.mart_delivery_performance",
+    "description": "Delivery performance mart by month and store.",
+    "source": "sql\\marts\\030_analytics_marts.sql",
+    "code_snippet": "create or replace view analytics.mart_delivery_performance as\nselect\n    date_trunc('month', fs.order_date)::date as month,\n    fs.store_id,\n    ds.store_name,\n    count(distinct fs.order_id) as orders,\n    count(distinct fs.order_id) filter (where fs.shipped_date is not null) as shipped_orders,\n    round(avg(fs.days_to_ship) filter (where fs.shipped_date is not null), 2) as avg_days_to_ship,\n    round(avg(case when fs.is_late_shipment then 1.0 else 0.0 end) filter (where fs.shipped_date is not null), 4) as late_shipment_rate\nfrom analytics.fact_sales fs\nleft join analytics.dim_store ds\n    on fs.store_id = ds.store_id\ngroup by 1, fs.store_id, ds.store_name;"
+  },
+  {
+    "id": "table:agent.available_analytics_tables",
+    "type": "view",
+    "name": "agent.available_analytics_tables",
+    "description": "SQL view agent.available_analytics_tables",
+    "source": "sql\\marts\\040_agent_read_models.sql",
+    "code_snippet": "create or replace view agent.available_analytics_tables as\nselect\n    schemaname as schema_name,\n    viewname as table_name,\n    definition\nfrom pg_views\nwhere schemaname in ('analytics', 'staging')\norder by schemaname, viewname;"
+  },
+  {
+    "id": "table:raw.brands",
+    "type": "table",
+    "name": "raw.brands",
+    "description": "Referenced relation raw.brands.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.categories",
+    "type": "table",
+    "name": "raw.categories",
+    "description": "Referenced relation raw.categories.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.customers",
+    "type": "table",
+    "name": "raw.customers",
+    "description": "Referenced relation raw.customers.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.orders",
+    "type": "table",
+    "name": "raw.orders",
+    "description": "Referenced relation raw.orders.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.order_items",
+    "type": "table",
+    "name": "raw.order_items",
+    "description": "Referenced relation raw.order_items.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.products",
+    "type": "table",
+    "name": "raw.products",
+    "description": "Referenced relation raw.products.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.staffs",
+    "type": "table",
+    "name": "raw.staffs",
+    "description": "Referenced relation raw.staffs.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.stocks",
+    "type": "table",
+    "name": "raw.stocks",
+    "description": "Referenced relation raw.stocks.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "table:raw.stores",
+    "type": "table",
+    "name": "raw.stores",
+    "description": "Referenced relation raw.stores.",
+    "source": "sql dependency"
+  },
+  {
+    "id": "agent:orchestrator_agent",
+    "type": "agent",
+    "name": "orchestrator_agent",
+    "description": "Điều phối câu hỏi tiếng Việt tới đúng domain agent và tổng hợp câu trả lời.",
+    "source": "agents/orchestrator.py",
+    "tables": [
+      "analytics.*",
+      "agent.*"
+    ],
+    "metrics": [
+      "revenue",
+      "orders",
+      "units_sold",
+      "average_order_value",
+      "discount_rate",
+      "late_shipment_rate",
+      "stock_quantity",
+      "inventory_value",
+      "sales_velocity",
+      "stockout_risk",
+      "gross_sales",
+      "discount_amount",
+      "order_items",
+      "sales_growth",
+      "customer_count",
+      "orders_per_customer",
+      "revenue_per_customer",
+      "state_revenue",
+      "top_customers",
+      "product_revenue",
+      "category_revenue",
+      "brand_revenue",
+      "avg_selling_price",
+      "discount_by_product",
+      "overstock_risk",
+      "store_revenue",
+      "store_orders",
+      "store_aov",
+      "store_inventory_health",
+      "orders_by_staff",
+      "revenue_by_staff",
+      "avg_order_value_by_staff",
+      "manager_performance",
+      "dq_pass_rate",
+      "failed_checks",
+      "issue_count",
+      "missing_required_fields",
+      "invalid_numeric_rows",
+      "negative_revenue_rows"
+    ]
+  },
+  {
+    "id": "agent:sales_agent",
+    "type": "agent",
+    "name": "sales_agent",
+    "description": "Phân tích doanh thu, đơn hàng, số lượng bán, AOV, discount và xu hướng bán hàng.",
+    "source": "PRD.md section 9",
+    "domain": "sales",
+    "metrics": [
+      "revenue",
+      "orders",
+      "units_sold",
+      "average_order_value",
+      "discount_rate",
+      "sales_growth"
+    ],
+    "tables": [
+      "analytics.fact_sales",
+      "analytics.mart_sales_monthly",
+      "analytics.mart_sales_by_store"
+    ]
+  },
+  {
+    "id": "metric:revenue",
+    "type": "metric",
+    "name": "revenue",
+    "description": "Doanh thu sau discount.",
+    "formula": "quantity * list_price * (1 - discount)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:orders",
+    "type": "metric",
+    "name": "orders",
+    "description": "Số đơn hàng distinct.",
+    "formula": "count(distinct order_id)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:units_sold",
+    "type": "metric",
+    "name": "units_sold",
+    "description": "Tổng số lượng sản phẩm bán ra.",
+    "formula": "sum(quantity)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:average_order_value",
+    "type": "metric",
+    "name": "average_order_value",
+    "description": "Giá trị đơn hàng trung bình.",
+    "formula": "sum(revenue) / count(distinct order_id)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:discount_rate",
+    "type": "metric",
+    "name": "discount_rate",
+    "description": "Tỷ lệ discount theo gross sales.",
+    "formula": "sum(discount_amount) / sum(gross_sales)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:sales_growth",
+    "type": "metric",
+    "name": "sales_growth",
+    "description": "Period-over-period revenue growth.",
+    "formula": "(current_period_revenue - prior_period_revenue) / prior_period_revenue",
+    "source": "analytics.mart_sales_monthly"
+  },
+  {
+    "id": "agent:customer_agent",
+    "type": "agent",
+    "name": "customer_agent",
+    "description": "Phân tích khách hàng theo state/city, top customers, doanh thu và tần suất mua.",
+    "source": "PRD.md section 9",
+    "domain": "customer",
+    "metrics": [
+      "customer_count",
+      "orders_per_customer",
+      "revenue_per_customer",
+      "state_revenue",
+      "top_customers"
+    ],
+    "tables": [
+      "analytics.dim_customer",
+      "analytics.mart_customer_segments",
+      "analytics.fact_sales"
+    ]
+  },
+  {
+    "id": "metric:customer_count",
+    "type": "metric",
+    "name": "customer_count",
+    "description": "Customer count in a segment or geography.",
+    "formula": "count(distinct customer_id)",
+    "source": "analytics.mart_customer_segments"
+  },
+  {
+    "id": "metric:orders_per_customer",
+    "type": "metric",
+    "name": "orders_per_customer",
+    "description": "Average order frequency per customer.",
+    "formula": "sum(orders) / count(distinct customer_id)",
+    "source": "analytics.mart_customer_segments"
+  },
+  {
+    "id": "metric:revenue_per_customer",
+    "type": "metric",
+    "name": "revenue_per_customer",
+    "description": "Average revenue per customer.",
+    "formula": "sum(revenue) / count(distinct customer_id)",
+    "source": "analytics.mart_customer_segments"
+  },
+  {
+    "id": "metric:state_revenue",
+    "type": "metric",
+    "name": "state_revenue",
+    "description": "Revenue grouped by customer state.",
+    "formula": "sum(revenue) grouped by state",
+    "source": "analytics.mart_customer_segments"
+  },
+  {
+    "id": "metric:top_customers",
+    "type": "metric",
+    "name": "top_customers",
+    "description": "Highest value customers by revenue and orders.",
+    "formula": "order customers by revenue desc, orders desc",
+    "source": "analytics.mart_customer_segments"
+  },
+  {
+    "id": "agent:product_agent",
+    "type": "agent",
+    "name": "product_agent",
+    "description": "Phân tích hiệu suất sản phẩm, brand, category, model year, giá bán và discount.",
+    "source": "PRD.md section 9",
+    "domain": "product",
+    "metrics": [
+      "product_revenue",
+      "units_sold",
+      "category_revenue",
+      "brand_revenue",
+      "avg_selling_price"
+    ],
+    "tables": [
+      "analytics.dim_product",
+      "analytics.mart_product_performance",
+      "analytics.fact_sales"
+    ]
+  },
+  {
+    "id": "metric:product_revenue",
+    "type": "metric",
+    "name": "product_revenue",
+    "description": "Revenue by product.",
+    "formula": "sum(revenue) grouped by product_id",
+    "source": "analytics.mart_product_performance"
+  },
+  {
+    "id": "metric:category_revenue",
+    "type": "metric",
+    "name": "category_revenue",
+    "description": "Revenue by product category.",
+    "formula": "sum(revenue) grouped by category_name",
+    "source": "analytics.mart_product_performance"
+  },
+  {
+    "id": "metric:brand_revenue",
+    "type": "metric",
+    "name": "brand_revenue",
+    "description": "Revenue by brand.",
+    "formula": "sum(revenue) grouped by brand_name",
+    "source": "analytics.mart_product_performance"
+  },
+  {
+    "id": "metric:avg_selling_price",
+    "type": "metric",
+    "name": "avg_selling_price",
+    "description": "Average selling price after discount.",
+    "formula": "sum(revenue) / sum(quantity)",
+    "source": "analytics.mart_product_performance"
+  },
+  {
+    "id": "agent:inventory_agent",
+    "type": "agent",
+    "name": "inventory_agent",
+    "description": "Phân tích tồn kho, sales velocity, stockout risk, overstock risk và inventory value.",
+    "source": "PRD.md section 9",
+    "domain": "inventory",
+    "metrics": [
+      "stock_quantity",
+      "sales_velocity",
+      "stockout_risk",
+      "overstock_risk",
+      "inventory_value"
+    ],
+    "tables": [
+      "analytics.fact_inventory",
+      "analytics.mart_inventory_risk"
+    ]
+  },
+  {
+    "id": "metric:stock_quantity",
+    "type": "metric",
+    "name": "stock_quantity",
+    "description": "Số lượng tồn kho theo store/product.",
+    "formula": "sum(stock_quantity)",
+    "source": "analytics.fact_inventory"
+  },
+  {
+    "id": "metric:sales_velocity",
+    "type": "metric",
+    "name": "sales_velocity",
+    "description": "Tốc độ bán gần đây dùng cho inventory risk.",
+    "formula": "units_sold_90d / 90",
+    "source": "analytics.mart_inventory_risk"
+  },
+  {
+    "id": "metric:stockout_risk",
+    "type": "metric",
+    "name": "stockout_risk",
+    "description": "Rủi ro hết hàng khi stock thấp so với sales velocity.",
+    "formula": "inventory_status in ('stockout', 'stockout_risk')",
+    "source": "analytics.mart_inventory_risk"
+  },
+  {
+    "id": "metric:overstock_risk",
+    "type": "metric",
+    "name": "overstock_risk",
+    "description": "Excess inventory or inventory with no recent sales.",
+    "formula": "inventory_status = 'overstock_risk'",
+    "source": "analytics.mart_inventory_risk"
+  },
+  {
+    "id": "metric:inventory_value",
+    "type": "metric",
+    "name": "inventory_value",
+    "description": "Giá trị tồn kho proxy.",
+    "formula": "stock_quantity * list_price",
+    "source": "analytics.fact_inventory"
+  },
+  {
+    "id": "agent:store_agent",
+    "type": "agent",
+    "name": "store_agent",
+    "description": "Phân tích doanh thu cửa hàng, đơn hàng, AOV, giao trễ và sức khỏe tồn kho.",
+    "source": "PRD.md section 9",
+    "domain": "store",
+    "metrics": [
+      "store_revenue",
+      "store_orders",
+      "store_aov",
+      "late_shipment_rate",
+      "store_inventory_health"
+    ],
+    "tables": [
+      "analytics.dim_store",
+      "analytics.mart_sales_by_store",
+      "analytics.mart_delivery_performance"
+    ]
+  },
+  {
+    "id": "metric:store_revenue",
+    "type": "metric",
+    "name": "store_revenue",
+    "description": "Revenue grouped by store.",
+    "formula": "sum(revenue) grouped by store_id",
+    "source": "analytics.mart_sales_by_store"
+  },
+  {
+    "id": "metric:store_orders",
+    "type": "metric",
+    "name": "store_orders",
+    "description": "Distinct orders grouped by store.",
+    "formula": "count(distinct order_id) grouped by store_id",
+    "source": "analytics.mart_sales_by_store"
+  },
+  {
+    "id": "metric:store_aov",
+    "type": "metric",
+    "name": "store_aov",
+    "description": "Average order value by store.",
+    "formula": "sum(revenue) / count(distinct order_id)",
+    "source": "analytics.mart_sales_by_store"
+  },
+  {
+    "id": "metric:late_shipment_rate",
+    "type": "metric",
+    "name": "late_shipment_rate",
+    "description": "Tỷ lệ giao trễ trên đơn đã ship.",
+    "formula": "avg(is_late_shipment)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:store_inventory_health",
+    "type": "metric",
+    "name": "store_inventory_health",
+    "description": "Inventory health summary by store.",
+    "formula": "count products by inventory_status grouped by store",
+    "source": "analytics.mart_inventory_risk"
+  },
+  {
+    "id": "agent:staff_agent",
+    "type": "agent",
+    "name": "staff_agent",
+    "description": "Phân tích hiệu suất nhân viên, số đơn, doanh thu, AOV và manager/store performance.",
+    "source": "PRD.md section 9",
+    "domain": "staff",
+    "metrics": [
+      "orders_by_staff",
+      "revenue_by_staff",
+      "avg_order_value_by_staff",
+      "manager_performance"
+    ],
+    "tables": [
+      "analytics.dim_staff",
+      "analytics.mart_staff_performance",
+      "analytics.fact_sales"
+    ]
+  },
+  {
+    "id": "metric:orders_by_staff",
+    "type": "metric",
+    "name": "orders_by_staff",
+    "description": "Distinct orders handled by staff.",
+    "formula": "count(distinct order_id) grouped by staff_id",
+    "source": "analytics.mart_staff_performance"
+  },
+  {
+    "id": "metric:revenue_by_staff",
+    "type": "metric",
+    "name": "revenue_by_staff",
+    "description": "Revenue handled by staff.",
+    "formula": "sum(revenue) grouped by staff_id",
+    "source": "analytics.mart_staff_performance"
+  },
+  {
+    "id": "metric:avg_order_value_by_staff",
+    "type": "metric",
+    "name": "avg_order_value_by_staff",
+    "description": "Average order value by staff.",
+    "formula": "sum(revenue) / count(distinct order_id)",
+    "source": "analytics.mart_staff_performance"
+  },
+  {
+    "id": "metric:manager_performance",
+    "type": "metric",
+    "name": "manager_performance",
+    "description": "Staff performance grouped by manager.",
+    "formula": "aggregate staff orders and revenue by manager_id",
+    "source": "analytics.mart_staff_performance"
+  },
+  {
+    "id": "agent:data_quality_agent",
+    "type": "agent",
+    "name": "data_quality_agent",
+    "description": "Giải thích data quality checks, null, duplicate key, FK integrity, invalid dates và orphan records.",
+    "source": "PRD.md section 9",
+    "domain": "data_quality",
+    "metrics": [
+      "dq_pass_rate",
+      "failed_checks",
+      "issue_count"
+    ],
+    "tables": [
+      "audit.data_quality_check_results",
+      "reports.data_quality_report",
+      "staging.*",
+      "analytics.*"
+    ]
+  },
+  {
+    "id": "table:audit.data_quality_check_results",
+    "type": "table",
+    "name": "audit.data_quality_check_results",
+    "description": "Table or view used by data_quality_agent.",
+    "source": "agent contract"
+  },
+  {
+    "id": "table:reports.data_quality_report",
+    "type": "table",
+    "name": "reports.data_quality_report",
+    "description": "Table or view used by data_quality_agent.",
+    "source": "agent contract"
+  },
+  {
+    "id": "table:staging.*",
+    "type": "table",
+    "name": "staging.*",
+    "description": "Table or view used by data_quality_agent.",
+    "source": "agent contract"
+  },
+  {
+    "id": "table:analytics.*",
+    "type": "table",
+    "name": "analytics.*",
+    "description": "Table or view used by data_quality_agent.",
+    "source": "agent contract"
+  },
+  {
+    "id": "metric:dq_pass_rate",
+    "type": "metric",
+    "name": "dq_pass_rate",
+    "description": "Share of data quality checks passing.",
+    "formula": "passed_checks / total_checks",
+    "source": "audit.data_quality_check_results"
+  },
+  {
+    "id": "metric:failed_checks",
+    "type": "metric",
+    "name": "failed_checks",
+    "description": "Count of failed data quality checks.",
+    "formula": "count(*) where status = 'fail'",
+    "source": "audit.data_quality_check_results"
+  },
+  {
+    "id": "metric:issue_count",
+    "type": "metric",
+    "name": "issue_count",
+    "description": "Total issue count from data quality checks.",
+    "formula": "sum(issue_count)",
+    "source": "audit.data_quality_check_results"
+  },
+  {
+    "id": "metric:gross_sales",
+    "type": "metric",
+    "name": "gross_sales",
+    "description": "Revenue before discount.",
+    "formula": "quantity * list_price",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:discount_amount",
+    "type": "metric",
+    "name": "discount_amount",
+    "description": "Absolute discount amount.",
+    "formula": "quantity * list_price * discount",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:order_items",
+    "type": "metric",
+    "name": "order_items",
+    "description": "Line item count.",
+    "formula": "count(*)",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:discount_by_product",
+    "type": "metric",
+    "name": "discount_by_product",
+    "description": "Discount rate by product, brand or category.",
+    "formula": "sum(discount_amount) / sum(gross_sales)",
+    "source": "analytics.mart_product_performance"
+  },
+  {
+    "id": "metric:missing_required_fields",
+    "type": "metric",
+    "name": "missing_required_fields",
+    "description": "Rows with required fact_sales fields missing.",
+    "formula": "count rows where required fields are null",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:invalid_numeric_rows",
+    "type": "metric",
+    "name": "invalid_numeric_rows",
+    "description": "Rows with invalid quantity, price or discount values.",
+    "formula": "count rows where numeric rules fail",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "metric:negative_revenue_rows",
+    "type": "metric",
+    "name": "negative_revenue_rows",
+    "description": "Rows with negative revenue.",
+    "formula": "count rows where revenue < 0",
+    "source": "analytics.fact_sales"
+  },
+  {
+    "id": "template:sales_monthly",
+    "type": "sql_template",
+    "name": "sales_monthly",
+    "domain": "sales",
+    "description": "Doanh thu, order, AOV và discount theo tháng.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "sales_agent"
+    ],
+    "metrics": [
+      "revenue",
+      "orders",
+      "units_sold",
+      "average_order_value",
+      "discount_rate"
+    ],
+    "tables": [
+      "analytics.mart_sales_monthly"
+    ],
+    "keywords": [
+      "doanh thu",
+      "revenue",
+      "sales",
+      "tháng",
+      "theo tháng",
+      "monthly",
+      "2016",
+      "2017",
+      "2018"
+    ],
+    "sql_template": "select month, year, month_number, orders, units_sold, revenue, average_order_value, discount_rate\n        from analytics.mart_sales_monthly\n        \n        order by month\n        limit 100"
+  },
+  {
+    "id": "template:sales_summary",
+    "type": "sql_template",
+    "name": "sales_summary",
+    "domain": "sales",
+    "description": "KPI executive summary.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "sales_agent"
+    ],
+    "metrics": [
+      "revenue",
+      "orders",
+      "units_sold",
+      "average_order_value",
+      "late_shipment_rate"
+    ],
+    "tables": [
+      "analytics.mart_executive_summary"
+    ],
+    "keywords": [
+      "tổng quan",
+      "overview",
+      "kpi",
+      "summary",
+      "doanh số",
+      "tổng doanh thu"
+    ],
+    "sql_template": "select orders, order_items, customers_with_orders, products_sold, stores_with_orders,\n               first_order_date, last_order_date, revenue, units_sold, average_order_value,\n               discount_rate, avg_days_to_ship, late_shipment_rate\n        from analytics.mart_executive_summary\n        limit 1"
+  },
+  {
+    "id": "template:top_store",
+    "type": "sql_template",
+    "name": "top_store",
+    "domain": "store",
+    "description": "Xếp hạng cửa hàng theo revenue.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "store_agent",
+      "sales_agent"
+    ],
+    "metrics": [
+      "store_revenue",
+      "orders",
+      "average_order_value",
+      "late_shipment_rate"
+    ],
+    "tables": [
+      "analytics.mart_sales_by_store"
+    ],
+    "keywords": [
+      "cửa hàng",
+      "cua hang",
+      "store",
+      "cao nhất",
+      "top store",
+      "doanh thu",
+      "revenue"
+    ],
+    "sql_template": "select store_name, city, state, orders, customers, units_sold, revenue,\n               average_order_value, late_shipment_rate\n        from analytics.mart_sales_by_store\n        order by revenue desc\n        limit 10"
+  },
+  {
+    "id": "template:delivery_late",
+    "type": "sql_template",
+    "name": "delivery_late",
+    "domain": "store",
+    "description": "Tỷ lệ giao trễ theo cửa hàng.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "store_agent"
+    ],
+    "metrics": [
+      "late_shipment_rate",
+      "avg_days_to_ship"
+    ],
+    "tables": [
+      "analytics.mart_delivery_performance"
+    ],
+    "keywords": [
+      "giao trễ",
+      "giao tre",
+      "late",
+      "delivery",
+      "shipment",
+      "ship",
+      "chậm giao"
+    ],
+    "sql_template": "select store_name, sum(orders) as orders, sum(shipped_orders) as shipped_orders,\n               avg(avg_days_to_ship) as avg_days_to_ship,\n               avg(late_shipment_rate) as late_shipment_rate\n        from analytics.mart_delivery_performance\n        group by store_name\n        order by late_shipment_rate desc\n        limit 10"
+  },
+  {
+    "id": "metric:avg_days_to_ship",
+    "type": "metric",
+    "name": "avg_days_to_ship",
+    "description": "Metric used by SQL template delivery_late.",
+    "formula": "See SQL template and metric catalog.",
+    "source": "agent.sql_templates"
+  },
+  {
+    "id": "template:product_performance",
+    "type": "sql_template",
+    "name": "product_performance",
+    "domain": "product",
+    "description": "Hiệu quả sản phẩm, brand và category.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "product_agent"
+    ],
+    "metrics": [
+      "product_revenue",
+      "brand_revenue",
+      "category_revenue",
+      "units_sold",
+      "avg_selling_price"
+    ],
+    "tables": [
+      "analytics.mart_product_performance"
+    ],
+    "keywords": [
+      "sản phẩm",
+      "san pham",
+      "product",
+      "brand",
+      "thương hiệu",
+      "category",
+      "danh mục",
+      "model",
+      "doanh thu",
+      "revenue",
+      "đóng góp",
+      "dong gop"
+    ],
+    "sql_template": "select product_name, brand_name, category_name, model_year, orders, units_sold,\n               revenue, avg_selling_price, discount_rate\n        from analytics.mart_product_performance\n        order by revenue desc\n        limit 20"
+  },
+  {
+    "id": "template:inventory_risk",
+    "type": "sql_template",
+    "name": "inventory_risk",
+    "domain": "inventory",
+    "description": "Rủi ro stockout/overstock theo store và product.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "inventory_agent",
+      "product_agent"
+    ],
+    "metrics": [
+      "stock_quantity",
+      "sales_velocity",
+      "stockout_risk",
+      "overstock_risk",
+      "inventory_value"
+    ],
+    "tables": [
+      "analytics.mart_inventory_risk"
+    ],
+    "keywords": [
+      "tồn kho",
+      "ton kho",
+      "stock",
+      "inventory",
+      "stockout",
+      "overstock",
+      "bán chạy",
+      "ban chay",
+      "rủi ro",
+      "rui ro"
+    ],
+    "sql_template": "select store_name, product_name, brand_name, category_name, stock_quantity,\n               units_sold_90d, daily_sales_velocity, days_of_supply, inventory_value,\n               inventory_status\n        from analytics.mart_inventory_risk\n        where inventory_status in ('stockout', 'stockout_risk', 'overstock_risk')\n        order by\n            case inventory_status\n                when 'stockout' then 1\n                when 'stockout_risk' then 2\n                when 'overstock_risk' then 3\n                else 4\n            end,\n            case when days_of_supply is null then 1 else 0 end,\n            days_of_supply asc,\n            units_sold_90d desc\n        limit 25"
+  },
+  {
+    "id": "template:customer_state",
+    "type": "sql_template",
+    "name": "customer_state",
+    "domain": "customer",
+    "description": "Phân tích khách hàng theo state hoặc top customer.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "customer_agent"
+    ],
+    "metrics": [
+      "customer_count",
+      "orders_per_customer",
+      "revenue_per_customer",
+      "state_revenue",
+      "top_customers"
+    ],
+    "tables": [
+      "analytics.mart_customer_segments"
+    ],
+    "keywords": [
+      "khách",
+      "khach",
+      "customer",
+      "state",
+      "bang",
+      "bang nào",
+      "city",
+      "vip",
+      "top khách"
+    ],
+    "sql_template": "select state, count(*) as customers, sum(orders) as orders,\n               sum(units_sold) as units_sold, sum(revenue) as revenue\n        from analytics.mart_customer_segments\n        group by state\n        order by revenue desc\n        limit 20"
+  },
+  {
+    "id": "template:staff_revenue",
+    "type": "sql_template",
+    "name": "staff_revenue",
+    "domain": "staff",
+    "description": "Hiệu quả staff theo revenue/orders/AOV.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "staff_agent"
+    ],
+    "metrics": [
+      "orders_by_staff",
+      "revenue_by_staff",
+      "avg_order_value_by_staff",
+      "manager_performance"
+    ],
+    "tables": [
+      "analytics.mart_staff_performance"
+    ],
+    "keywords": [
+      "nhân viên",
+      "nhan vien",
+      "staff",
+      "manager",
+      "xử lý",
+      "xu ly",
+      "salesperson"
+    ],
+    "sql_template": "select staff_name, store_name, manager_name, orders, customers, units_sold,\n               revenue, average_order_value, late_shipment_rate\n        from analytics.mart_staff_performance\n        order by revenue desc\n        limit 20"
+  },
+  {
+    "id": "template:data_quality_fact_sales",
+    "type": "sql_template",
+    "name": "data_quality_fact_sales",
+    "domain": "data_quality",
+    "description": "Kiểm tra chất lượng dữ liệu đọc-only trên analytics.fact_sales.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "data_quality_agent"
+    ],
+    "metrics": [
+      "missing_required_fields",
+      "invalid_numeric_rows",
+      "negative_revenue_rows"
+    ],
+    "tables": [
+      "analytics.fact_sales"
+    ],
+    "keywords": [
+      "lỗi dữ liệu",
+      "loi du lieu",
+      "data quality",
+      "null",
+      "duplicate",
+      "foreign key",
+      "order_items",
+      "quality"
+    ],
+    "sql_template": "select count(*) as rows_checked,\n               count(*) filter (\n                   where order_id is null\n                      or item_id is null\n                      or product_id is null\n                      or quantity is null\n                      or list_price is null\n                      or discount is null\n               ) as missing_required_fields,\n               count(*) filter (\n                   where quantity <= 0\n                      or list_price <= 0\n                      or discount < 0\n                      or discount >= 1\n               ) as invalid_numeric_rows,\n               count(*) filter (where revenue < 0) as negative_revenue_rows\n        from analytics.fact_sales\n        limit 1"
+  },
+  {
+    "id": "template:metric_catalog",
+    "type": "sql_template",
+    "name": "metric_catalog",
+    "domain": "data_quality",
+    "description": "Tra cứu metric catalog read-only.",
+    "source": "agents/sql_templates.py",
+    "agents": [
+      "data_quality_agent",
+      "orchestrator_agent"
+    ],
+    "metrics": [
+      "metric_catalog"
+    ],
+    "tables": [
+      "agent.metric_catalog"
+    ],
+    "keywords": [
+      "metric",
+      "catalog",
+      "định nghĩa",
+      "dinh nghia",
+      "formula",
+      "kpi là gì",
+      "kpi la gi",
+      "revenue",
+      "orders",
+      "units_sold",
+      "average_order_value"
+    ],
+    "sql_template": "select metric_name, description, formula, primary_source\n        from agent.metric_catalog\n        where is_active\n        order by metric_name\n        limit 50"
+  },
+  {
+    "id": "metric:metric_catalog",
+    "type": "metric",
+    "name": "metric_catalog",
+    "description": "Metric used by SQL template metric_catalog.",
+    "formula": "See SQL template and metric catalog.",
+    "source": "agent.sql_templates"
+  },
+  {
+    "id": "question:q_sales_monthly_2017",
+    "type": "question_example",
+    "name": "q_sales_monthly_2017",
+    "description": "Doanh thu theo thang nam 2017 nhu the nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Doanh thu theo thang nam 2017 nhu the nao?",
+    "domain": "sales",
+    "agents": [
+      "sales_agent"
+    ],
+    "metrics": [
+      "revenue",
+      "orders"
+    ],
+    "tables": [
+      "analytics.mart_sales_monthly"
+    ],
+    "template": "sales_monthly"
+  },
+  {
+    "id": "question:q_sales_summary",
+    "type": "question_example",
+    "name": "q_sales_summary",
+    "description": "Tong revenue, orders va AOV cua Bike Store la bao nhieu?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Tong revenue, orders va AOV cua Bike Store la bao nhieu?",
+    "domain": "sales",
+    "agents": [
+      "sales_agent"
+    ],
+    "metrics": [
+      "revenue",
+      "orders",
+      "average_order_value"
+    ],
+    "tables": [
+      "analytics.mart_executive_summary"
+    ],
+    "template": "sales_summary"
+  },
+  {
+    "id": "question:q_store_top_revenue",
+    "type": "question_example",
+    "name": "q_store_top_revenue",
+    "description": "Cua hang nao co doanh thu cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Cua hang nao co doanh thu cao nhat?",
+    "domain": "store",
+    "agents": [
+      "store_agent",
+      "sales_agent"
+    ],
+    "metrics": [
+      "store_revenue"
+    ],
+    "tables": [
+      "analytics.mart_sales_by_store"
+    ],
+    "template": "top_store"
+  },
+  {
+    "id": "question:q_delivery_late_store",
+    "type": "question_example",
+    "name": "q_delivery_late_store",
+    "description": "Cua hang nao co ty le giao tre cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Cua hang nao co ty le giao tre cao nhat?",
+    "domain": "store",
+    "agents": [
+      "store_agent"
+    ],
+    "metrics": [
+      "late_shipment_rate"
+    ],
+    "tables": [
+      "analytics.mart_delivery_performance"
+    ],
+    "template": "delivery_late"
+  },
+  {
+    "id": "question:q_product_top_revenue",
+    "type": "question_example",
+    "name": "q_product_top_revenue",
+    "description": "San pham nao co revenue cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "San pham nao co revenue cao nhat?",
+    "domain": "product",
+    "agents": [
+      "product_agent"
+    ],
+    "metrics": [
+      "product_revenue"
+    ],
+    "tables": [
+      "analytics.mart_product_performance"
+    ],
+    "template": "product_performance"
+  },
+  {
+    "id": "question:q_brand_revenue",
+    "type": "question_example",
+    "name": "q_brand_revenue",
+    "description": "Brand nao dong gop doanh thu lon nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Brand nao dong gop doanh thu lon nhat?",
+    "domain": "product",
+    "agents": [
+      "product_agent"
+    ],
+    "metrics": [
+      "brand_revenue"
+    ],
+    "tables": [
+      "analytics.mart_product_performance"
+    ],
+    "template": "product_performance"
+  },
+  {
+    "id": "question:q_inventory_stockout",
+    "type": "question_example",
+    "name": "q_inventory_stockout",
+    "description": "San pham nao ban chay nhung ton kho thap?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "San pham nao ban chay nhung ton kho thap?",
+    "domain": "inventory",
+    "agents": [
+      "inventory_agent",
+      "product_agent"
+    ],
+    "metrics": [
+      "stockout_risk",
+      "sales_velocity"
+    ],
+    "tables": [
+      "analytics.mart_inventory_risk"
+    ],
+    "template": "inventory_risk"
+  },
+  {
+    "id": "question:q_inventory_overstock",
+    "type": "question_example",
+    "name": "q_inventory_overstock",
+    "description": "Mat hang nao co rui ro overstock?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Mat hang nao co rui ro overstock?",
+    "domain": "inventory",
+    "agents": [
+      "inventory_agent",
+      "product_agent"
+    ],
+    "metrics": [
+      "overstock_risk"
+    ],
+    "tables": [
+      "analytics.mart_inventory_risk"
+    ],
+    "template": "inventory_risk"
+  },
+  {
+    "id": "question:q_customer_state_revenue",
+    "type": "question_example",
+    "name": "q_customer_state_revenue",
+    "description": "Bang nao co revenue khach hang cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Bang nao co revenue khach hang cao nhat?",
+    "domain": "customer",
+    "agents": [
+      "customer_agent"
+    ],
+    "metrics": [
+      "state_revenue"
+    ],
+    "tables": [
+      "analytics.mart_customer_segments"
+    ],
+    "template": "customer_state"
+  },
+  {
+    "id": "question:q_customer_top",
+    "type": "question_example",
+    "name": "q_customer_top",
+    "description": "Khach hang VIP hoac top customers la ai?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Khach hang VIP hoac top customers la ai?",
+    "domain": "customer",
+    "agents": [
+      "customer_agent"
+    ],
+    "metrics": [
+      "top_customers"
+    ],
+    "tables": [
+      "analytics.mart_customer_segments"
+    ],
+    "template": "customer_state"
+  },
+  {
+    "id": "question:q_staff_revenue",
+    "type": "question_example",
+    "name": "q_staff_revenue",
+    "description": "Nhan vien nao tao revenue cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Nhan vien nao tao revenue cao nhat?",
+    "domain": "staff",
+    "agents": [
+      "staff_agent"
+    ],
+    "metrics": [
+      "revenue_by_staff"
+    ],
+    "tables": [
+      "analytics.mart_staff_performance"
+    ],
+    "template": "staff_revenue"
+  },
+  {
+    "id": "question:q_staff_orders",
+    "type": "question_example",
+    "name": "q_staff_orders",
+    "description": "Nhan vien nao xu ly nhieu don nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Nhan vien nao xu ly nhieu don nhat?",
+    "domain": "staff",
+    "agents": [
+      "staff_agent"
+    ],
+    "metrics": [
+      "orders_by_staff"
+    ],
+    "tables": [
+      "analytics.mart_staff_performance"
+    ],
+    "template": "staff_revenue"
+  },
+  {
+    "id": "question:q_dq_order_items",
+    "type": "question_example",
+    "name": "q_dq_order_items",
+    "description": "Co loi du lieu nao trong order_items khong?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Co loi du lieu nao trong order_items khong?",
+    "domain": "data_quality",
+    "agents": [
+      "data_quality_agent"
+    ],
+    "metrics": [
+      "missing_required_fields",
+      "invalid_numeric_rows"
+    ],
+    "tables": [
+      "analytics.fact_sales"
+    ],
+    "template": "data_quality_fact_sales"
+  },
+  {
+    "id": "question:q_metric_revenue",
+    "type": "question_example",
+    "name": "q_metric_revenue",
+    "description": "Metric revenue duoc dinh nghia nhu the nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Metric revenue duoc dinh nghia nhu the nao?",
+    "domain": "data_quality",
+    "agents": [
+      "data_quality_agent",
+      "orchestrator_agent"
+    ],
+    "metrics": [
+      "revenue"
+    ],
+    "tables": [
+      "agent.metric_catalog"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "question:q_sales_discount",
+    "type": "question_example",
+    "name": "q_sales_discount",
+    "description": "Ty le discount toan bo dataset la bao nhieu?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Ty le discount toan bo dataset la bao nhieu?",
+    "domain": "sales",
+    "agents": [
+      "sales_agent"
+    ],
+    "metrics": [
+      "discount_rate"
+    ],
+    "tables": [
+      "analytics.mart_executive_summary"
+    ],
+    "template": "sales_summary"
+  },
+  {
+    "id": "question:q_store_aov",
+    "type": "question_example",
+    "name": "q_store_aov",
+    "description": "Cua hang nao co AOV cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Cua hang nao co AOV cao nhat?",
+    "domain": "store",
+    "agents": [
+      "store_agent",
+      "sales_agent"
+    ],
+    "metrics": [
+      "store_aov"
+    ],
+    "tables": [
+      "analytics.mart_sales_by_store"
+    ],
+    "template": "top_store"
+  },
+  {
+    "id": "question:q_category_units",
+    "type": "question_example",
+    "name": "q_category_units",
+    "description": "Category nao ban chay nhat theo units sold?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Category nao ban chay nhat theo units sold?",
+    "domain": "product",
+    "agents": [
+      "product_agent"
+    ],
+    "metrics": [
+      "category_revenue",
+      "units_sold"
+    ],
+    "tables": [
+      "analytics.mart_product_performance"
+    ],
+    "template": "product_performance"
+  },
+  {
+    "id": "question:q_product_discount",
+    "type": "question_example",
+    "name": "q_product_discount",
+    "description": "San pham nao co discount rate cao nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "San pham nao co discount rate cao nhat?",
+    "domain": "product",
+    "agents": [
+      "product_agent"
+    ],
+    "metrics": [
+      "discount_by_product"
+    ],
+    "tables": [
+      "analytics.mart_product_performance"
+    ],
+    "template": "product_performance"
+  },
+  {
+    "id": "question:q_inventory_value",
+    "type": "question_example",
+    "name": "q_inventory_value",
+    "description": "Gia tri ton kho proxy duoc tinh tu bang nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Gia tri ton kho proxy duoc tinh tu bang nao?",
+    "domain": "inventory",
+    "agents": [
+      "inventory_agent"
+    ],
+    "metrics": [
+      "inventory_value"
+    ],
+    "tables": [
+      "agent.metric_catalog"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "question:q_customer_frequency",
+    "type": "question_example",
+    "name": "q_customer_frequency",
+    "description": "Tan suat mua trung binh cua khach hang duoc tinh nhu the nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Tan suat mua trung binh cua khach hang duoc tinh nhu the nao?",
+    "domain": "customer",
+    "agents": [
+      "customer_agent"
+    ],
+    "metrics": [
+      "orders_per_customer"
+    ],
+    "tables": [
+      "agent.metric_catalog"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "question:q_staff_manager",
+    "type": "question_example",
+    "name": "q_staff_manager",
+    "description": "Manager nao co team performance tot nhat?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Manager nao co team performance tot nhat?",
+    "domain": "staff",
+    "agents": [
+      "staff_agent"
+    ],
+    "metrics": [
+      "manager_performance"
+    ],
+    "tables": [
+      "analytics.mart_staff_performance"
+    ],
+    "template": "staff_revenue"
+  },
+  {
+    "id": "question:q_metric_late_shipment",
+    "type": "question_example",
+    "name": "q_metric_late_shipment",
+    "description": "Metric late_shipment_rate lay tu bang nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Metric late_shipment_rate lay tu bang nao?",
+    "domain": "data_quality",
+    "agents": [
+      "data_quality_agent",
+      "orchestrator_agent"
+    ],
+    "metrics": [
+      "late_shipment_rate"
+    ],
+    "tables": [
+      "agent.metric_catalog"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "question:q_schema_monthly_sales",
+    "type": "question_example",
+    "name": "q_schema_monthly_sales",
+    "description": "Bang nao phu hop de ve monthly sales trend?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Bang nao phu hop de ve monthly sales trend?",
+    "domain": "data_quality",
+    "agents": [
+      "data_quality_agent",
+      "orchestrator_agent"
+    ],
+    "metrics": [
+      "revenue",
+      "orders"
+    ],
+    "tables": [
+      "agent.metric_catalog",
+      "analytics.mart_sales_monthly"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "question:q_agent_scope",
+    "type": "question_example",
+    "name": "q_agent_scope",
+    "description": "Copilot ho tro nhung domain agent nao?",
+    "source": "sql/agent/020_seed_agent_metadata.sql",
+    "question": "Copilot ho tro nhung domain agent nao?",
+    "domain": "data_quality",
+    "agents": [
+      "data_quality_agent",
+      "orchestrator_agent"
+    ],
+    "metrics": [
+      "metric_catalog"
+    ],
+    "tables": [
+      "agent.agent_registry"
+    ],
+    "template": "metric_catalog"
+  },
+  {
+    "id": "report:data_quality_report",
+    "type": "report",
+    "name": "data_quality_report.md",
+    "description": "Report pass/fail data quality checks: row counts, null, duplicate keys, FK integrity, dates, numeric rules và KPI regression.",
+    "source": "reports/data_quality_report.md"
+  }
+]

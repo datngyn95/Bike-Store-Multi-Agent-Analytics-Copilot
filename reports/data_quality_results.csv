@@ -1,0 +1,35 @@
+run_id,checked_at,check_name,category,severity,status,issue_count,max_allowed,description
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_brands_expected_count,row_count,error,pass,0,0,raw.brands must contain 9 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_categories_expected_count,row_count,error,pass,0,0,raw.categories must contain 7 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_customers_expected_count,row_count,error,pass,0,0,raw.customers must contain 1445 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_orders_expected_count,row_count,error,pass,0,0,raw.orders must contain 1615 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_order_items_expected_count,row_count,error,pass,0,0,raw.order_items must contain 4722 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_products_expected_count,row_count,error,pass,0,0,raw.products must contain 321 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_staffs_expected_count,row_count,error,pass,0,0,raw.staffs must contain 10 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_stocks_expected_count,row_count,error,pass,0,0,raw.stocks must contain 939 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,raw_stores_expected_count,row_count,error,pass,0,0,raw.stores must contain 3 rows from source CSV.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_brands_matches_raw_brands_count,row_count,error,pass,0,0,staging.stg_brands row count must match raw.brands.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_categories_matches_raw_categories_count,row_count,error,pass,0,0,staging.stg_categories row count must match raw.categories.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_customers_matches_raw_customers_count,row_count,error,pass,0,0,staging.stg_customers row count must match raw.customers.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_orders_matches_raw_orders_count,row_count,error,pass,0,0,staging.stg_orders row count must match raw.orders.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_order_items_matches_raw_order_items_count,row_count,error,pass,0,0,staging.stg_order_items row count must match raw.order_items.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_products_matches_raw_products_count,row_count,error,pass,0,0,staging.stg_products row count must match raw.products.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_staffs_matches_raw_staffs_count,row_count,error,pass,0,0,staging.stg_staffs row count must match raw.staffs.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_stocks_matches_raw_stocks_count,row_count,error,pass,0,0,staging.stg_stocks row count must match raw.stocks.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,stg_stores_matches_raw_stores_count,row_count,error,pass,0,0,staging.stg_stores row count must match raw.stores.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,analytics_fact_sales_matches_stg_order_items_count,row_count,error,pass,0,0,analytics.fact_sales must preserve every staging order item row.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,analytics_fact_inventory_matches_stg_stocks_count,row_count,error,pass,0,0,analytics.fact_inventory must preserve every staging stock row.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,required_primary_keys_not_null,null_check,error,pass,0,0,All primary key fields must be non-null after staging.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,required_business_names_not_null,null_check,error,pass,0,0,Core human-readable names must be present for dimensions.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,order_required_fields_not_null,null_check,error,pass,0,0,Orders and order items must keep required analytic fields.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,duplicate_primary_keys,duplicate_check,error,pass,0,0,Primary and composite keys must be unique in staging.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,product_foreign_keys_valid,foreign_key,error,pass,0,0,Products must reference existing brands and categories.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,order_foreign_keys_valid,foreign_key,error,pass,0,0,"Orders must reference existing customers, stores and staffs."
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,order_item_foreign_keys_valid,foreign_key,error,pass,0,0,Order items must reference existing orders and products.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,staff_and_stock_foreign_keys_valid,foreign_key,error,pass,0,0,Staffs and stocks must reference existing stores/products/managers.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,order_status_values_valid,domain_rule,error,pass,0,0,"Order status must be one of the source system values 1, 2, 3, 4."
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,date_values_valid,date_check,error,pass,0,0,Order dates must be parseable and follow business date order.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,numeric_values_valid,numeric_check,error,pass,0,0,"Quantities, prices and discounts must be in valid ranges."
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,analytics_revenue_non_negative,analytics_regression,error,pass,0,0,Fact sales revenue must not contain negative values.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,analytics_core_kpis_match_prd_baseline,analytics_regression,error,pass,0,0,Core KPI totals must match the validated PRD baseline.
+8177dbaa-db71-4811-9d49-e3451930461d,2026-07-18T16:33:26.296382+00:00,analytics_marts_not_empty,analytics_regression,error,pass,0,0,Dashboard/API marts must contain rows.
